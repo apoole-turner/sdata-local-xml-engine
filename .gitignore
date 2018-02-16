@@ -1,0 +1,9 @@
+.classpath
+.settings/*
+.project
+target/*
+/target/
+*/node_modules/
+/build/
+Sports/
+.DS_Store
