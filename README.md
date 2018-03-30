@@ -9,7 +9,7 @@ Add to your pom.xml inside the dependencies section
 <dependency>
 	<groupId>com.turner.sdata</groupId>
 	<artifactId>local-xml-engine</artifactId>
-	<version>1.0.0</version>
+	<version>1.1.0</version>
 	<scope>compile</scope>
 </dependency>     
 ```
@@ -26,12 +26,39 @@ Also by default loki doesn't require you have an environment properties file. Th
 
 ```
 import com.turner.sdata.LocalXMLEngine;
-public class BrentIsTooCoolForSchool {
+public class LocalRunner {
 	public static void main(String[] args) {
 		LocalXMLEngine.setEnvPropertiesFileName("env.properties");
 		LocalXMLEngine.setWorkflowFilename("workflow.xml");
+		LocalXMLEngine.setThreadPropertiesFilename("loki-threads.properties");
+		LocalXMLEngine.setRules(new CustomRules());
 		LocalXMLEngine.start();
+
 	}
+}
+```
+
+### EnviromentRules Interface
+From the example above you'll notice a method called LocalXMLEngine.setRules(...). This accepts an implementation of the EnviromentRules interface. It has to methods to it excludeList and customFileTransformation. The excludeList works as expected. It will exclude **ERB FILES** that you don't want transformed (No need to specify erb. or .erb) in the name. The customFileTransformation will rename a **ERB FILE** to another name after it does its variable replacement.(No need to specify erb. or .erb)
+
+```
+public class CustomRules implements EnvironmentRules {
+
+	@Override
+	public List<String> excludeList() {
+		List<String> list = new ArrayList<>();
+		if (System.getenv("CLUSTER_QUARTZ") == null || System.getenv("CLUSTER_QUARTZ").equals("false"))
+			list.add("quartz.properties");
+		return list;
+	}
+
+	@Override
+	public Map<String, String> customFileTransformation() {
+		Map<String, String> map = new HashMap<>();
+		map.put("bindings", ".bindings");
+		return map;
+	}
+
 }
 ```
 

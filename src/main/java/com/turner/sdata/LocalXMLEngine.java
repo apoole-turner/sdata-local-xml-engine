@@ -12,20 +12,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.turner.loki.XmlWorkflowEngine;
+import com.turner.sdata.examples.CustomRules;
 
 public class LocalXMLEngine {
 	private static String workflowFilename;
 	private static String threadPropertiesFilename;
 	private static String envPropertiesFileName;
-	private static List<String> ignoredErbFileNames;
 	private static LocalXMLEngine localXMLEngine;
-
+	private static EnvironmentRules rules;
 	public static void main(String[] args) throws IOException {
 		LocalXMLEngine.start();
+		
 	}
 
 	private LocalXMLEngine() {
@@ -76,21 +78,35 @@ public class LocalXMLEngine {
 
 	}
 
-	private void replaceERB() {
+	private  void replaceERB() {
 		Path resourcePath = Paths.get(this.getClass().getClassLoader().getResource("").getFile());
 
 		List<Path> list = erbFiles(resourcePath);
 		for (Path path : list) {
-			//System.out.println(path);
+			Function<String, String> customName = (file) -> {
+				Path pathz = Paths.get(file);
+				String possibleMatch = rules.customFileTransformation().get(pathz.getFileName().toString());
+				if (possibleMatch != null) {
+					return pathz.getParent().resolve(possibleMatch).toString();
+				} else
+					return file;
+			};
 			String erbFile = path.toAbsolutePath().toString();
-			
-			String newFile ="";
-			
-			if(erbFile.endsWith(".erb"))
-				newFile=erbFile.substring(0, erbFile.indexOf(".erb"));
-			else {
-				Path parentFolder=path.getParent();
-				newFile=parentFolder.toAbsolutePath()+"/"+path.getFileName().toString().substring(4);
+
+			String newFile = "";
+
+			if (erbFile.endsWith(".erb")) {
+
+				newFile = erbFile.substring(0, erbFile.indexOf(".erb"));
+				if (rules != null) {
+					newFile=customName.apply(newFile);
+				}
+			} else {
+				Path parentFolder = path.getParent();
+				newFile = parentFolder.toAbsolutePath() + "/" + path.getFileName().toString().substring(4);
+				if (rules != null) {
+					newFile=customName.apply(newFile);
+				}
 			}
 			String[] arr = new String[2];
 			arr[0] = erbFile;
@@ -100,14 +116,25 @@ public class LocalXMLEngine {
 		}
 	}
 
-	private List<Path> erbFiles(Path path) {
+	private static List<Path> erbFiles(Path path) {
 		try {
-			//Files.walk(path).forEach(System.out::println);;
+			// Files.walk(path).forEach(System.out::println);;
 			Stream<Path> stream = Files.walk(path).sorted(Collections.reverseOrder())
-					.filter((pathz) -> pathz.toString().toLowerCase().endsWith(".erb") ||  pathz.getFileName().toString().toLowerCase().startsWith("erb.") );
-			if (ignoredErbFileNames != null) {
-				for (String ignored : ignoredErbFileNames)
-					stream = stream.filter((pathz) -> !pathz.toString().equalsIgnoreCase(ignored));
+					.filter((pathz) -> pathz.toString().toLowerCase().endsWith(".erb")
+							|| pathz.getFileName().toString().toLowerCase().startsWith("erb."));
+			if (rules != null) {
+				if (rules.excludeList() != null) {
+					for (String ignored : rules.excludeList())
+						stream = stream.filter((Path pathz) -> { 
+								String fileName=null;
+								if( pathz.toString().toLowerCase().endsWith(".erb"))
+									fileName=pathz.getFileName().toString().replaceAll(".erb", "");
+								else
+									fileName=pathz.getFileName().toString().replaceAll("erb.", "");
+							return !Paths.get(fileName).toString().equalsIgnoreCase(ignored);
+								
+						});
+				}
 			}
 			return stream.collect(Collectors.toList());
 		} catch (IOException e) {
@@ -179,17 +206,27 @@ public class LocalXMLEngine {
 	public static String getEnvPropertiesFileName() {
 		return envPropertiesFileName;
 	}
+	
+	
+
+	public static void setRules(EnvironmentRules rules) {
+		LocalXMLEngine.rules = rules;
+	}
 
 	public static void setEnvPropertiesFileName(String envPropertiesFileName) {
 		LocalXMLEngine.envPropertiesFileName = envPropertiesFileName;
 	}
-
+	@Deprecated
 	public static List<String> getIgnoredErbFileNames() {
-		return ignoredErbFileNames;
+		return null;
 	}
-
+	/**
+	 * Please use custom rules instead. This will no longer ignore any erbFiles
+	 * @param ignoredErbFileNames
+	 */
+	@Deprecated()
 	public static void setIgnoredErbFileNames(List<String> ignoredErbFileNames) {
-		LocalXMLEngine.ignoredErbFileNames = ignoredErbFileNames;
+		
 	}
 
 	
