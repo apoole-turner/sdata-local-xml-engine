@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<workflow xmlns:xi="http://www.w3.org/2001/XInclude"
+	dieOnFailedInit="true" threaded="true">
+
+	<action class="com.turner.pga.cuppublisher.plugin.TournamentS3SaveSplit"
+		name="EuropeanRyderCupToEuropeanRyderCupSplit">
+		<initialize>
+			<param name="tourYear" value="2018" />
+			<param name="tourType" value="R" />
+			<param name="effStartDate" value="" />
+			<param name="permNum" value="R001" />
+		</initialize>
+		<success
+			action="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_MessageBytesPluginToDistributor">
+			<param name="w" value="" />
+			<param name="nextAction" value="ConvertEuropeanRyderCupToEuropeanRyderCup" />
+		</success>
+	</action>
+
+	<action class="com.turner.pga.cuppublisher.plugin.ConvertEURyderToEURyder"
+		name="ConvertEuropeanRyderCupToEuropeanRyderCup">
+		<dist ownQueue="true">
+		</dist>
+	</action>
+
+
+	<action class="com.turner.loki.plugins.JmsDistributor" name="Test_jmsDist">
+		<initialize>
+			<param name="queueManager" value="Test_Distrubutor" />
+			<param name="queue" value="Test_Distrubutor" />
+			<param name="msgObjectType" value="bytes" />
+		</initialize>
+		<monitor />
+		<success action="stopFlow" />
+		<success action="showMessage" />
+	</action>
+	<action class="com.turner.loki.plugins.JmsReceiver" name="Test_jmsReceiver">
+		<initialize>
+			<param name="queueManager" value="Test_Distrubutor" />
+			<param name="queue" value="Test_Distrubutor" />
+			<param name="msgObjectType" value="bytes" />
+		</initialize>
+		<monitor />
+		<success action="Test_MessageBytesPluginFromReceiver" />
+		<success action="showMessage" />
+	</action>
+	<action class="com.turner.sdata.MessageToBytes" name="Test_MessageBytesPluginToDistributor">
+		<success action="Test_jmsDist" />
+	</action>
+	<action class="com.turner.sdata.MessageToObject" name="Test_MessageBytesPluginFromReceiver">
+		<success action="stopFlow" />
+	</action>
+	<action class="com.turner.loki.plugins.JmsDistributor"
+		name="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_jmsDist">
+		<initialize>
+			<param name="queueManager"
+				value="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_Distrubutor" />
+			<param name="queue"
+				value="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_Distrubutor" />
+			<param name="msgObjectType" value="bytes" />
+		</initialize>
+		<monitor />
+		<success action="stopFlow" />
+		<success action="showMessage" />
+	</action>
+	<action class="com.turner.loki.plugins.JmsReceiver"
+		name="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_jmsReceiver">
+		<initialize>
+			<param name="queueManager"
+				value="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_Distrubutor" />
+			<param name="queue"
+				value="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_Distrubutor" />
+			<param name="msgObjectType" value="bytes" />
+		</initialize>
+		<monitor />
+		<success
+			action="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_BytesToObjectPluginFromReceiver" />
+		<success action="showMessage" />
+	</action>
+	<action class="com.turner.sdata.MessageToBytes"
+		name="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_MessageBytesPluginToDistributor">
+		<success action="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_jmsDist" />
+	</action>
+	<action class="com.turner.sdata.MessageToObject"
+		name="Test_ConvertEuropeanRyderCupToEuropeanRyderCup_BytesToObjectPluginFromReceiver">
+		<success action="stopFlow" />
+	</action>
+</workflow>
+

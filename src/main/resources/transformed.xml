@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow threaded="true" xmlns:xi="http://www.w3.org/2001/XInclude"
+	dieOnFailedInit="true">
+
+	<action name="EuropeanRyderCupToEuropeanRyderCupSplit"
+		class="com.turner.pga.cuppublisher.plugin.TournamentS3SaveSplit">
+		<initialize>
+			<param name="tourYear" value="2018" />
+			<param name="tourType" value="R" />
+			<param name="effStartDate" value="" />
+			<param name="permNum" value="R001" />
+		</initialize>
+		<success action="[PROPERTY]_[ACTION_NAME]_MessageBytesPluginToDistributor">
+			<param name="w" value="" />
+			<param name="nextAction" value="ConvertEuropeanRyderCupToEuropeanRyderCup" />
+		</success>
+	</action>
+
+	<action name="ConvertEuropeanRyderCupToEuropeanRyderCup"
+		class="com.turner.pga.cuppublisher.plugin.ConvertEURyderToEURyder">
+		<dist ownQueue="true">
+		</dist>
+	</action>
+
+	<!-- Default project receiver/distributors -->
+	<action class="com.turner.loki.plugins.JmsDistributor" name="[PROPERTY]_jmsDist">
+		<initialize>
+			<param name="queueManager" value="[PROPERTY]_Distrubutor" />
+			<param name="queue" value="[PROPERTY]_Distrubutor" />
+			<param name="msgObjectType" value="bytes" />
+		</initialize>
+		<monitor />
+		<success action="stopFlow" />
+		<success action="showMessage" />
+	</action>
+	<action class="com.turner.loki.plugins.JmsReceiver" name="[PROPERTY]_jmsReceiver">
+		<initialize>
+			<param name="queueManager" value="[PROPERTY]_Distrubutor" />
+			<param name="queue" value="[PROPERTY]_Distrubutor" />
+			<param name="msgObjectType" value="bytes" />
+		</initialize>
+		<monitor />
+		<success action="[PROPERTY]_BytesToObjectPluginFromReceiver" />
+	</action>
+
+	<action name="[PROPERTY]_MessageBytesPluginToDistributor" class="com.turner.sdata.MessageToBytes">
+		<success action=[PROPERTY]_jmsDist></success>
+	</action>
+
+	<action name="[PROPERTY]_BytesToObjectPluginFromReceiver" class="com.turner.sdata.MessageToObject">
+		<success action="stopFlow"></success>
+	</action>
+	
+	
+	<!-- Custom Queue -->
+	
+	<action class="com.turner.loki.plugins.JmsDistributor" name="[PROPERTY]_[ACTION_NAME]_jmsDist">
+		<initialize>
+			<param name="queueManager" value="[PROPERTY]_[ACTION_NAME]_Distrubutor" />
+			<param name="queue" value="[PROPERTY]_[ACTION_NAME]_Distrubutor" />
+			<param name="msgObjectType" value="bytes" />
+		</initialize>
+		<monitor />
+		<success action="stopFlow" />
+		<success action="showMessage" />
+	</action>
+	<action class="com.turner.loki.plugins.JmsReceiver" name="[PROPERTY]_[ACTION_NAME]_jmsReceiver">
+		<initialize>
+			<param name="queueManager" value="[PROPERTY]_[ACTION_NAME]_Distrubutor" />
+			<param name="queue" value="[PROPERTY]_[ACTION_NAME]_Distrubutor" />
+			<param name="msgObjectType" value="bytes" />
+		</initialize>
+		<monitor />
+		<success action="[PROPERTY]_[ACTION_NAME]_BytesToObjectPluginFromReceiver" />
+	</action>
+	
+	<action name="[PROPERTY]_[ACTION_NAME]_MessageBytesPluginToDistributor" class="com.turner.sdata.MessageToBytes">
+		<success action="[PROPERTY]_[ACTION_NAME]_jmsDist"></success>
+	</action>
+
+	<action name="[PROPERTY]_[ACTION_NAME]_BytesToObjectPluginFromReceiver" class="com.turner.sdata.MessageToObject">
+		<success action="stopFlow"></success>
+	</action>
+</workflow>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow threaded="true" xmlns:xi="http://www.w3.org/2001/XInclude"
+	dieOnFailedInit="true">
+
+	<action name="EuropeanRyderCupToEuropeanRyderCupSplit"
+		class="com.turner.pga.cuppublisher.plugin.TournamentS3SaveSplit">
+		<initialize>
+			<param name="tourYear" value="2018" />
+			<param name="tourType" value="R" />
+			<param name="effStartDate" value="" />
+			<param name="permNum" value="R001" />
+		</initialize>
+		<success action="ConvertEuropeanRyderCupToEuropeanRyderCup">
+			<param name="w" value="" />
+		</success>
+	</action>
+
+	<action name="ConvertEuropeanRyderCupToEuropeanRyderCup"
+		class="com.turner.pga.cuppublisher.plugin.ConvertEURyderToEURyder">
+		<dist ownQueue="true">
+		</dist>
+	</action>
+
+
+</workflow>
