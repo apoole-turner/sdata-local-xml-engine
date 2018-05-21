@@ -27,36 +27,19 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
+import com.turner.sdata.helpers.DistributorBuilder;
+import com.turner.sdata.helpers.ReceiverBuilder;
+import com.turner.sdata.helpers.ToBytesBuilder;
+import com.turner.sdata.helpers.ToObjectBuilder;
+
 public class Distrubtor {
 
 	private String workflowFile;
 	private String propertyName;
-	private String jmsDistrubutorStr="<?xml version=\"1.0\" encoding=\"UTF-8\"?><action name=\"%%NAME%%\" class=\"com.turner.loki.plugins.JmsDistributor\">\n" + 
-			//"		threaded=\"true\" threadPoolName=\"gpmsDistributor\" poolMax=\"3\"\n" + 
-			//"		poolMaxIdle=\"8\" poolMaxWait=\"15000\">\n" + 
-			"		<initialize>\n" + 
-			"			<param name=\"queueManager\" value=\"%%QUEUE_MANAGER%%\" />\n" + 
-			"			<param name=\"queue\" value=\"%%QUEUE%%\" />\n" + 
-			"			<param name=\"msgObjectType\" value=\"bytes\" />\n" + 
-			"		</initialize>\n" + 
-			"		<monitor />\n" + 
-			"		<success action=\"stopFlow\" />\n" + 
-			"		<success action=\"showMessage\" />\n" + 
-			"	</action>";
-	private String jmsReceiverStr="<?xml version=\"1.0\" encoding=\"UTF-8\"?><action name=\"%%NAME%%\" class=\"com.turner.loki.plugins.JmsReceiver\">\n" + 
-			"		<initialize>\n" + 
-			"			<param name=\"queueManager\" value=\"%%QUEUE_MANAGER%%\" />\n" + 
-			"			<param name=\"queue\" value=\"%%QUEUE%%\" />\n" + 
-			"			<param name=\"msgObjectType\" value=\"bytes\" />\n" + 
-			"		</initialize>\n" + 
-			"		<monitor />\n" + 
-			"		<success action=\"stopFlow\" />\n" + 
-			"		<success action=\"showMessage\" />\n" + 
-			"	</action>";
 	
 	public static void main(String[] args) {
 		Distrubtor d = new Distrubtor();
-		d.workflowFile = "workflow.xml";
+		d.workflowFile = "workflow2.xml";
 		d.propertyName ="Test";
 		d.execute();
 		
@@ -73,25 +56,13 @@ public class Distrubtor {
 			DocumentBuilder db = dbf.newDocumentBuilder();
 			InputStream stream = ImportXiIncludeFiles.class.getClassLoader().getResourceAsStream(this.workflowFile);
 			Document doc = db.parse(stream);
-			NodeList actionNodes = doc.getElementsByTagName("action");
-			List<ActionRoot> actions = new ArrayList<>();
-			Map<String, Action> actionsWithDist = null;
-			for (int i = 0; i < actionNodes.getLength(); i++) {
-				Element action = (Element) actionNodes.item(i);
-				String name = action.getAttribute("name");
-				String clazz = action.getAttribute("class");
-				ActionRoot ac = new ActionRoot();
-				ac.setName(name);
-				ac.setClazz(clazz);
-				ac.setElement(action);
-				actions.add(ac);
-			}
-			actionsWithDist = getActionsWithDist(actions);
-			addSuccessFailNodes(actions);
-			List<Action> listDistSuccessActions=findSuccessFailDist(actionsWithDist,actions);//Do not add ones who have a third level
-			listDistSuccessActions.forEach(System.out::println);
-			createJMSActions(doc,actionsWithDist);
-			changeNameAndCreatenewSubSuccess(actionsWithDist, actions);
+			List<ActionRoot> actionRoots=getActionRoots(doc);
+			Map<String, ActionRoot> actionRootsWithDist = getActionsWithDist(actionRoots);
+			addSuccessFailNodes(actionRoots);
+			List<ActionChain> successFailActionsNotReplaced=findSuccessFailDist(actionRootsWithDist,actionRoots);//Do not add ones who have a third level
+			createDefaultJMSActions(doc);
+			createCustomJMSActions(doc,actionRoots);
+			changeNameAndCreatenewSubSuccess(successFailActionsNotReplaced,actionRootsWithDist);
 			System.out.println(getStringOfDocument(doc));
 		} catch (Exception e) {
 
@@ -99,88 +70,146 @@ public class Distrubtor {
 		}
 
 	}
-	
-	private void createJMSActions(Document doc, Map<String, Action> actionsWithDist) throws ParserConfigurationException, SAXException, IOException, TransformerException {
+	private void createDefaultJMSActions(Document doc) throws SAXException, IOException, ParserConfigurationException, TransformerException {
+		
 		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+		DocumentBuilder db = dbf.newDocumentBuilder();
+		DistributorBuilder dbr=new DistributorBuilder();
+		dbr.setName(this.createJMSDistName(null));
+		dbr.setQueue(this.createQueueName(null));
+		dbr.setQueueManager(this.createQueueManagerName(null));
+		addDocToDoc(db, doc, dbr.build());
+		
+		ReceiverBuilder rbr=new ReceiverBuilder();
+		rbr.setName(this.createJMSReceiverName(null));
+		rbr.setQueue(this.createQueueName(null));
+		rbr.setQueueManager(this.createQueueManagerName(null));
+		rbr.setSuccessAction(this.createMessageToObjectName(null));
+		addDocToDoc(db, doc, rbr.build());
+		
+		ToBytesBuilder tbb=new ToBytesBuilder();
+		tbb.setName(this.createMessageToBytesName(null));
+		tbb.setSuccessAction(this.createJMSDistName(null));
+		addDocToDoc(db, doc, tbb.build());
+		
+		ToObjectBuilder tob=new ToObjectBuilder();
+		tob.setName(this.createMessageToObjectName(null));
+		addDocToDoc(db, doc, tob.build());
+	}
 
-		for(Entry<String, Action> entry:actionsWithDist.entrySet()) {
-			DocumentBuilder db = dbf.newDocumentBuilder();
+	private List<ActionRoot> getActionRoots(Document doc){
+		NodeList actionNodes = doc.getElementsByTagName("action");
+		List<ActionRoot> actions = new ArrayList<>();
+		
+		for (int i = 0; i < actionNodes.getLength(); i++) {
+			Element action = (Element) actionNodes.item(i);
+			String name = action.getAttribute("name");
+			String clazz = action.getAttribute("class");
+			boolean ownQueue=false;
+			boolean hasDist=false;
+			NodeList distList=action.getElementsByTagName("dist");
+			if(distList.getLength()>0) {
+				hasDist=true;
+				Element dist=(Element)distList.item(0);
+				String ownQueueStr=dist.getAttribute("ownQueue");
+				if(ownQueueStr!=null && ownQueueStr.equalsIgnoreCase("true")) {
+					ownQueue=true;
+				}
+			}
+			ActionRoot ac = new ActionRoot();
+			ac.setName(name);
+			ac.setClazz(clazz);
+			ac.setElement(action);
+			ac.setOwnQueue(ownQueue);
+			ac.setHasDist(hasDist);
+			actions.add(ac);
+		}
+		return actions;
+	}
+	private void createCustomJMSActions(Document doc, List<ActionRoot> actions) throws ParserConfigurationException, SAXException, IOException, TransformerException {
+		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+		DocumentBuilder db = dbf.newDocumentBuilder();
+		for(ActionRoot ac:actions) {
+			if(!ac.ownQueue)
+				continue;
 			
-			String jmsDist=jmsDistrubutorStr.replace("%%NAME%%", this.propertyName + "_" + entry.getKey() + "jmsDist");
-			jmsDist=jmsDist.replaceAll("%%QUEUE_MANAGER%%", this.propertyName + "_" + entry.getKey() +"_Distrubutor");
-			jmsDist=jmsDist.replaceAll("%%QUEUE%%", this.propertyName + "_" + entry.getKey() +"_Distrubutor");
-			Document subDocDist=db.parse(new InputSource(new StringReader(jmsDist)));
 			
-			String jmsRec=jmsReceiverStr.replace("%%NAME%%", this.propertyName + "_" + entry.getKey() + "jmsReceiver");
-			jmsRec=jmsRec.replaceAll("%%QUEUE_MANAGER%%", this.propertyName + "_" + entry.getKey() +"_Distrubutor");
-			jmsRec=jmsRec.replaceAll("%%QUEUE%%", this.propertyName + "_" + entry.getKey() +"_Distrubutor");
-			Document subDocRec=db.parse(new InputSource(new StringReader(jmsRec)));
+			DistributorBuilder dbr=new DistributorBuilder();
+			dbr.setName(this.createJMSDistName(ac.getName()));
+			dbr.setQueue(this.createQueueName(ac.getName()));
+			dbr.setQueueManager(this.createQueueManagerName(ac.getName()));
+			addDocToDoc(db, doc, dbr.build());
 			
-			Node nodeDist=doc.importNode(subDocDist.getFirstChild(), true);
+			ReceiverBuilder rbr=new ReceiverBuilder();
+			rbr.setName(this.createJMSReceiverName(ac.getName()));
+			rbr.setQueue(this.createQueueName(ac.getName()));
+			rbr.setQueueManager(this.createQueueManagerName(ac.getName()));
+			rbr.setSuccessAction(this.createMessageToObjectName(ac.getName()));
+			addDocToDoc(db, doc, rbr.build());
 			
-			Node nodeRec=doc.importNode(subDocRec.getFirstChild(), true);
+			ToBytesBuilder tbb=new ToBytesBuilder();
+			tbb.setName(this.createMessageToBytesName(ac.getName()));
+			tbb.setSuccessAction(this.createJMSDistName(ac.getName()));
+			addDocToDoc(db, doc, tbb.build());
 			
-			doc.getFirstChild().appendChild(nodeDist);
-			doc.getFirstChild().appendChild(nodeRec);
+			ToObjectBuilder tob=new ToObjectBuilder();
+			tob.setName(this.createMessageToObjectName(ac.getName()));
+			addDocToDoc(db, doc, tob.build());
 			
 		};
 		
 	}
 
-	private <T extends Action>List<Action> findSuccessFailDist(Map<String, Action> actionsWithDist, List<T> actions) {
-		List<Action> successFailNodes=new ArrayList<>();
+	private <T extends Action>List<ActionChain> findSuccessFailDist(Map<String, ActionRoot> actionsWithDist, List<ActionRoot> actions) {
+		List<ActionChain> successFailNodes=new ArrayList<>();
 		for (Action root : actions) {
 			for (ActionChain ac : root.getChildrenActions()) {
-				if (actionsWithDist.get(ac.getName()) != null) {
+				boolean is3LevelsDeep=false;
+				if (ac.getChildrenActions().isEmpty() && actionsWithDist.get(ac.getName()) != null) {
 					successFailNodes.add(ac);
-					if(ac.getChildrenActions().size()>0) {
-						successFailNodes.addAll(findSuccessFailDist(actionsWithDist, ac.getChildrenActions()));
-					}
 				}
+				
 			}
 		}
 		return successFailNodes;
 	}
 
-	private <T extends Action>void changeNameAndCreatenewSubSuccess(Map<String, Action> actionsWithDist,List<T> actions) {
-		for (Action root : actions) {
+	private void changeNameAndCreatenewSubSuccess(List<ActionChain> actions,Map<String, ActionRoot> actionRootsWithDist) {
+		for (ActionChain ac : actions) {
 			//System.out.println(root.getName() + ":" + root.getChildrenActions().size());
-			for (ActionChain ac : root.getChildrenActions()) {
-				if (actionsWithDist.get(ac.getName()) != null) {
-					Element el = ac.getElement();
-					el.setAttribute("action", this.propertyName+"_MessageBytesPrep");
-					Element param=el.getOwnerDocument().createElement("param");
-					param.setAttribute("name", "to");
-					param.setAttribute("value", "BYTES");
-					el.appendChild(param);
-					
-
-				}
+			String actionhasQueue=null;
+			if (actionRootsWithDist.get(ac.getName()).ownQueue) {
+				actionhasQueue=ac.getName();
 			}
+			Element el = ac.getElement();
+			el.setAttribute("action", this.createMessageToBytesName(actionhasQueue));
+			Element param=el.getOwnerDocument().createElement("param");
+			param.setAttribute("name", "nextAction");
+			param.setAttribute("value", ac.getName());
+			el.appendChild(param);
+				
+
+			
 		}
 	}
 	
-	private Map<String, Action> getActionsWithDist(List<ActionRoot> actions) {
-		Map<String, Action> actionsWithDist = new HashMap<>();
+	private Map<String, ActionRoot> getActionsWithDist(List<ActionRoot> actions) {
+		Map<String, ActionRoot> actionsWithDist = new HashMap<>();
 		for (ActionRoot root : actions) {
-			NodeList list = root.getElement().getElementsByTagName("dist");
-			if (list.getLength() > 0) {
-				Element action = (Element) list.item(0);
+			if(root.hasDist)
 				actionsWithDist.put(root.getName(), root);
-			}
-
 		}
 		return actionsWithDist;
 	}
 
-	private void addSuccessFailNodes(List<ActionRoot> actions) {
-
+	private List<ActionChain> addSuccessFailNodes(List<ActionRoot> actions) {
+		List<ActionChain> acList=new ArrayList<>();
 		for (ActionRoot action : actions) {
 
 			List<Element> nodes = getShallowSuccessFail(action.getElement());
 
 			for (int i = 0; i < nodes.size(); i++) {
-
+				
 				Element el = nodes.get(i);
 				ActionChain ac = commonChain(el, action, actions);
 				action.addChild(ac);
@@ -189,6 +218,7 @@ public class Distrubtor {
 			}
 
 		}
+		return acList;
 
 	}
 
@@ -199,14 +229,7 @@ public class Distrubtor {
 		childAc.setName(name);
 		childAc.setElement(el);
 		childAc.setFailNode(el.getTagName().equalsIgnoreCase("failure"));
-		if (!hasAction(actionRootList, name)) {
-			String prepend = "";
-			if (childAc.isFailNode) {
-				prepend = "Failue";
-			} else
-				prepend = "Success";
-			String msg = prepend + " Action is missing " + childAc.getAuditTrail();
-		}
+		
 		return childAc;
 	}
 
@@ -218,15 +241,7 @@ public class Distrubtor {
 		}
 	}
 
-	private boolean hasAction(List<ActionRoot> actionRootList, String actionName) {
-		for (int i = 0; i < actionRootList.size(); i++) {
-			if (actionRootList.get(i).getName().equals(actionName)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
+	
 	private List<Element> getShallowSuccessFail(Element el) {
 		NodeList list = el.getChildNodes();
 		List<Element> newList = new ArrayList<>();
@@ -240,16 +255,7 @@ public class Distrubtor {
 		return newList;
 	}
 
-	private String getSuccessActions(List<ActionChain> actionsList, Node node) {
-		Element el = (Element) node;
-		NodeList successes = el.getElementsByTagName("success");
-		for (int i = 0; i < successes.getLength(); i++) {
-			Element success = (Element) successes.item(i);
-			String name = success.getAttribute("action");
-
-		}
-		return null;
-	}
+	
 	private String getStringOfDocument(Node doc) throws TransformerException {
 		Transformer transformer = TransformerFactory.newInstance().newTransformer();
 		transformer.setOutputProperty(OutputKeys.INDENT, "yes");
@@ -267,7 +273,54 @@ public class Distrubtor {
 	public void setWorkflowFile(String workflowFile) {
 		this.workflowFile = workflowFile;
 	}
-
+	private String createJMSDistName(String actionName) {
+		if(actionName==null) {
+			return this.propertyName +"_jmsDist";
+		}else {
+			return this.propertyName + "_" + actionName + "_jmsDist";
+		}
+	}
+	private void addDocToDoc(DocumentBuilder db,Document doc,String xmlStr) throws SAXException, IOException {
+		Document subDocRec=db.parse(new InputSource(new StringReader(xmlStr)));
+		Node node=doc.importNode(subDocRec.getFirstChild(), true);
+		doc.getFirstChild().appendChild(node);
+	}
+	private String createJMSReceiverName(String actionName) {
+		if(actionName==null) {
+			return this.propertyName +"_jmsReceiver";
+		}else {
+			return this.propertyName + "_" + actionName + "_jmsReceiver";
+		}
+	}
+	private String createQueueName(String actionName) {
+		if(actionName==null) {
+			return this.propertyName +"_Distrubutor";
+		}else {
+			return this.propertyName + "_" + actionName + "_Distrubutor";
+		}
+	}
+	private String createQueueManagerName(String actionName) {
+		if(actionName==null) {
+			return this.propertyName +"_Distrubutor";
+		}else {
+			return this.propertyName + "_" + actionName + "_Distrubutor";
+		}
+	}
+	
+	private String createMessageToBytesName(String actionName) {
+		if(actionName==null) {
+			return this.propertyName +"_MessageBytesPluginToDistributor";
+		}else {
+			return this.propertyName + "_" + actionName + "_MessageBytesPluginToDistributor";
+		}
+	}
+	private String createMessageToObjectName(String actionName) {
+		if(actionName==null) {
+			return this.propertyName +"_MessageBytesPluginFromReceiver";
+		}else {
+			return this.propertyName + "_" + actionName + "_BytesToObjectPluginFromReceiver";
+		}
+	}
 	private static abstract class Action {
 		private List<ActionChain> childrenActions;
 		private String name;
@@ -311,7 +364,8 @@ public class Distrubtor {
 
 	private static class ActionRoot extends Action {
 		private String clazz;
-
+		private boolean ownQueue;
+		private boolean hasDist;
 		public String getClazz() {
 			return clazz;
 		}
@@ -320,10 +374,27 @@ public class Distrubtor {
 			this.clazz = clazz;
 		}
 
+		public boolean isOwnQueue() {
+			return ownQueue;
+		}
+
+		public void setOwnQueue(boolean ownQueue) {
+			this.ownQueue = ownQueue;
+		}
+
 		@Override
 		public String getAuditTrail() {
 			return this.getName();
 		}
+
+		public boolean isHasDist() {
+			return hasDist;
+		}
+
+		public void setHasDist(boolean hasDist) {
+			this.hasDist = hasDist;
+		}
+		
 
 	}
 
