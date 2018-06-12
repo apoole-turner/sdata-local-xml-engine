@@ -16,6 +16,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import javax.swing.text.html.HTMLDocument.HTMLReader.IsindexAction;
+
 import com.turner.loki.XmlWorkflowEngine;
 import com.turner.sdata.examples.CustomRules;
 
@@ -23,8 +25,10 @@ public class LocalXMLEngine {
 	private static String workflowFilename;
 	private static String threadPropertiesFilename;
 	private static String envPropertiesFileName;
+	private static String bindingsFile;
 	private static LocalXMLEngine localXMLEngine;
 	private static EnvironmentRules rules;
+	private static boolean distributionMode;
 	public static void main(String[] args) throws IOException {
 		LocalXMLEngine.start();
 		
@@ -34,6 +38,7 @@ public class LocalXMLEngine {
 		
 	}
 
+	@SuppressWarnings("static-access")
 	public static void start() {
 		if (LocalXMLEngine.localXMLEngine == null) {
 			LocalXMLEngine.localXMLEngine = new LocalXMLEngine();
@@ -46,7 +51,12 @@ public class LocalXMLEngine {
 				}
 			}
 			localXMLEngine.replaceERB();
-			
+			if(localXMLEngine.isDistributionMode()) {
+				Distrubtor.setBindingsFile(localXMLEngine.bindingsFile);
+				Distrubtor.setWorkflowFile(localXMLEngine.workflowFilename);
+				Distrubtor.setPropertyName("DELETE_ME");
+				Distrubtor.execute();
+			}
 			localXMLEngine.startXmlWorkflowEngine();
 		}
 	} 
@@ -216,6 +226,22 @@ public class LocalXMLEngine {
 	public static void setEnvPropertiesFileName(String envPropertiesFileName) {
 		LocalXMLEngine.envPropertiesFileName = envPropertiesFileName;
 	}
+	public static String getBindingsFile() {
+		return bindingsFile;
+	}
+
+	public static void setBindingsFile(String bindingsFile) {
+		LocalXMLEngine.bindingsFile = bindingsFile;
+	}
+	
+	public static boolean isDistributionMode() {
+		return distributionMode;
+	}
+
+	public static void setDistributionMode(boolean distributionMode) {
+		LocalXMLEngine.distributionMode = distributionMode;
+	}
+
 	@Deprecated
 	public static List<String> getIgnoredErbFileNames() {
 		return null;

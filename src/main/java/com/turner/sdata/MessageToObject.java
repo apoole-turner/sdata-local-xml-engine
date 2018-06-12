@@ -18,23 +18,25 @@ import com.turner.loki.annotations.Description;
 import com.turner.loki.annotations.Name;
 import com.turner.loki.core.exceptions.PluginException;
 import com.turner.loki.core.interfaces.TransformIF;
+import com.turner.loki.core.interfaces.ValidateIF;
 
-public class MessageToObject implements TransformIF {
+public class MessageToObject implements ValidateIF {
 	Logger logger = LoggerFactory.getLogger(MessageToObject.class);
 
+
 	@Override
-	public Message transform(Message message) throws PluginException {
+	public void validate(Message message) throws PluginException {
 		GenericMessage newMessage = null;
 		try {
 			GenericMessage gm = GenericMessageFactory.createGenericMessage(message);
 
-			byte[] objBytes = gm.getBytesProperty("data");
+			byte[] objBytes = gm.getBytesProperty("body");
 			Object obj = SerializationUtils.deserialize(objBytes);
 			if (!(obj instanceof GenericMessage)) {
 				throw new PluginException("The deserialized object is not a genericMessage");
 			}
-			newMessage = (GenericMessage) obj;
-			newMessage.setStringProperty("nextAction", gm.getStringProperty("nextAction"));
+			newMessage =  GenericMessageFactory.createGenericMessage((GenericMessage) obj);
+			newMessage.setStringProperty("nextAction", newMessage.getStringProperty("nextActionToBeCalled"));
 			newMessage.setStringProperty("currentAction", "workflowInjector");
 
 			XmlWorkflowEngine xmle = XmlWorkflowEngine.getInstance();
@@ -45,7 +47,7 @@ public class MessageToObject implements TransformIF {
 		} catch (Exception e) {
 			throw new PluginException("Generic Message could not be generated", e);
 		}
-		return null;
+		
 	}
 
 }

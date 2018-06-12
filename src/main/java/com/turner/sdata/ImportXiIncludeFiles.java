@@ -28,7 +28,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.Text;
 
-public class ImportXiIncludeFiles {
+class ImportXiIncludeFiles {
 	public static void main(String[] args) throws Exception {
 		ImportXiIncludeFiles horrid = new ImportXiIncludeFiles();
 		horrid.createCombinedWorkflowFile("cfg/workflow.xml");

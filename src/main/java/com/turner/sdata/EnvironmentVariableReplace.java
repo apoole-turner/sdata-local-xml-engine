@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
  *   [Absolute path to source erb file] [Absolute path to target file]
  *
  */
-public class EnvironmentVariableReplace {
+class EnvironmentVariableReplace {
 	public static String myPat = "<%= *@([a-zA-Z0-9_]*) *%>";
 
 	public static void main(String[] args) {

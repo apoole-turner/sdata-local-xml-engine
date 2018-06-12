@@ -24,10 +24,6 @@ public class ReceiverBuilder {
 	}
 
 
-	public ReceiverBuilder setJmsReceiverStr(String jmsReceiverStr) {
-		this.jmsReceiverStr = jmsReceiverStr;
-		return this;
-	}
 
 
 	public ReceiverBuilder setQueueManager(String queueManager) {

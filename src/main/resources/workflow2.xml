@@ -10,15 +10,20 @@
 			<param name="effStartDate" value="" />
 			<param name="permNum" value="R001" />
 		</initialize>
-		<success action="ConvertEuropeanRyderCupToEuropeanRyderCup">
+		<success action="ConvertEuropeanRyderCupToEuropeanRyderCup" dist="true" >
+			<param name="w" value="" />
+		</success>
+		<success action="HAHAHA" dist="true" ownQueue="true" >
+			<param name="w" value="" />
+		</success>
+		<success action="HAHAHA" dist="true" >
 			<param name="w" value="" />
 		</success>
 	</action>
 
 	<action name="ConvertEuropeanRyderCupToEuropeanRyderCup"
 		class="com.turner.pga.cuppublisher.plugin.ConvertEURyderToEURyder">
-		<dist ownQueue="true">
-		</dist>
+		<dist ownQueue="true"></dist>
 	</action>
 
 
